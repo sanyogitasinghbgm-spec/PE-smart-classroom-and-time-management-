@@ -1,5 +1,6 @@
 // backend/controllers/timetableGenerator.js
-import { GoogleGenAI } from "@google/genai";
+// import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import Course from '../models/course.js';
 import Faculty from '../models/Faculty.js';
 import Room from '../models/Room.js';
@@ -15,7 +16,8 @@ try {
   if (!process.env.GOOGLE_API_KEY) {
     throw new Error('GOOGLE_API_KEY is not set in environment variables.');
   }
-  genAI = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY });
+  // genAI = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY });
+  genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
   console.log('Google AI (Gemini) initialized successfully');
 } catch (error) {
   console.error('Failed to initialize Google AI:', error.message);
@@ -140,13 +142,16 @@ export async function generateTimetableWithAI(request) {
     console.log('Sending request to Gemini AI...');
     
     // ===== FIXED CODE =====
-    const result = await genAI.models.generateContent({
-      model: 'gemini-2.0-flash',
-      contents: prompt
-    });
+    // const result = await genAI.models.generateContent({
+    //   model: 'gemini-1.5-flash-latest',
+    //   contents: prompt
+    // });
     
-    // Extract the text from the response correctly
-    const responseText = result.text;
+    // // Extract the text from the response correctly
+    // const responseText = result.text;
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+    const result = await model.generateContent(prompt);
+    const responseText = result.response.text();
     
     // If the above doesn't work, try this alternative approach:
     // const responseText = result.candidates[0].content.parts[0].text;
@@ -175,24 +180,58 @@ export async function generateTimetableWithAI(request) {
       };
     });
 
-    const totalHours = enrichedSchedule.length;
-    const availableSlots = DAYS.length * TIME_SLOTS.length;
-    const utilizationRate = Math.round((totalHours / availableSlots) * 100);
+    const validSchedule = enrichedSchedule.filter(entry => 
+  entry.courseId && entry.facultyId && entry.roomId
+);
 
-    const timetableData = {
-      name: `${department} - Semester ${semester} ${academicYear}`,
-      department,
-      semester: String(semester),
-      year: parseInt(academicYear),
-      schedule: enrichedSchedule,
-      conflicts: [], // AI is expected to return a conflict-free schedule
-      status: 'draft',
-      metadata: {
-        totalHours,
-        utilizationRate,
-        conflictCount: 0
-      }
-    };
+
+// Conflict detection
+const conflicts = [];
+const facultySlotMap = {};
+const roomSlotMap = {};
+
+validSchedule.forEach((entry, index) => {
+  const facultyKey = `${entry.facultyId}_${entry.day}_${entry.startTime}`;
+  const roomKey = `${entry.roomId}_${entry.day}_${entry.startTime}`;
+
+  if (facultySlotMap[facultyKey] !== undefined) {
+    conflicts.push({
+      type: 'faculty_conflict',
+      message: `Faculty conflict: ${entry.facultyName} has 2 classes on ${entry.day} at ${entry.startTime}`,
+      entries: [String(facultySlotMap[facultyKey]), String(index)]
+    });
+  } else {
+    facultySlotMap[facultyKey] = index;
+  }
+
+  if (roomSlotMap[roomKey] !== undefined) {
+    conflicts.push({
+      type: 'room_conflict',
+      message: `Room conflict: ${entry.roomName} has 2 classes on ${entry.day} at ${entry.startTime}`,
+      entries: [String(roomSlotMap[roomKey]), String(index)]
+    });
+  } else {
+    roomSlotMap[roomKey] = index;
+  }
+});
+const totalHours = validSchedule.length;  // ← yeh line add karo
+const availableSlots = DAYS.length * TIME_SLOTS.length;
+const utilizationRate = Math.round((totalHours / availableSlots) * 100);
+
+const timetableData = {
+  name: `${department} - Semester ${semester} ${academicYear}`,
+  department,
+  semester: String(semester),
+  year: parseInt(academicYear),
+  schedule: validSchedule,
+  conflicts: conflicts,
+  status: 'draft',
+  metadata: {
+    totalHours,
+    utilizationRate,
+    conflictCount: conflicts.length
+  }
+};
 
     const timetable = new Timetable(timetableData);
     const created = await timetable.save();

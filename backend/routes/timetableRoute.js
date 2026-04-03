@@ -15,6 +15,17 @@ timetablesRouter.get("/", async (req, res) => {
   }
 });
 
+// Generate timetable using AI
+timetablesRouter.post("/generate", async (req, res) => {
+  try {
+    const createdTimetable = await generateTimetableWithAI(req.body);
+    res.json(createdTimetable);
+  } catch (error) {
+    console.error("Error generating timetable:", error);
+    res.status(500).json({ error: "Failed to generate timetable" });
+  }
+});
+
 // Get timetable by ID
 timetablesRouter.get("/:id", async (req, res) => {
   try {
@@ -63,16 +74,7 @@ timetablesRouter.delete("/:id", async (req, res) => {
   }
 });
 
-// Generate timetable using AI
-timetablesRouter.post("/generate", async (req, res) => {
-  try {
-    const createdTimetable = await generateTimetableWithAI(req.body);
-    res.json(createdTimetable);
-  } catch (error) {
-    console.error("Error generating timetable:", error);
-    res.status(500).json({ error: "Failed to generate timetable" });
-  }
-});
+
 
 // Optimize timetable using AI
 // timetablesRouter.post("/:id/optimize", async (req, res) => {
