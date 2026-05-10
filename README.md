@@ -140,6 +140,4 @@ This project is licensed under the **MIT License**.
 * GeminiAI / Dialogflow for chatbot inspiration
 * Constraint Satisfaction Problem (CSP) & Genetic Algorithms for timetable generation
 
----
 
-👉 Would you like me to also **add some sample screenshots / usage GIF placeholders** in the README so it looks more professional on GitHub?
